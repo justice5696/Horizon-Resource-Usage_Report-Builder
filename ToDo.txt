@@ -1,0 +1,18 @@
+ToDo:
+
+- What to do when a pool is disabled
+
+- Check if a function exists to map the vcenter names to friendly names (not sure how)
+
+
+- create an additional version of the get pools function that uses "/inventory/v6/desktop-pools"
+    - this includes CPU and Memory - not available until 2206
+
+
+- Add the vCenter Domain to the user credentials for vCenter auth (in case the domain isn't the default) - just do username+@+domain
+
+- Think about what happens if multiple Horizon pods have the same vCenter
+
+
+
+
