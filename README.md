@@ -2,7 +2,7 @@
  A tool to build an xlsx file containing the aggregated data of all Horizon Desktops' resource usage in vCenter
 
 Must call the Python script HRUC.py with the following syntax:
-    python _path_\HRUC.py _Path to INI Template_.ini
+    python _"path"_\HRUC.py _"Path to INI Config File"_.ini
 
 The script queries all of the given Horizon Pods and any vCenter server connected to those Horizon Pods. From Horizon, it pulls each Pool and associated pool data. From vCenter, it pulls the resource usage and capacity of each cluster (CPU and Memory). All of this data together produces a Dictionary for every vCenter Cluster, and within the dictionary entry for each Cluster is a list of every single Pool that leverages the cluster. From this data an, Excel file is generated. Each sheet of the Excel file corresponds to a vCenter Cluster, and the max possible resource usage is computed (Max number of desktops in a pool * size of desktops in the automated pool).
 
