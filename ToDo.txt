@@ -12,7 +12,6 @@ ToDo:
 
 - Add the vCenter Domain to the user credentials for vCenter auth (in case the domain isn't the default) - just do username+@+domain
 
-- Fix HRUC: overwriting the previous entry on the datasheet, and not collecting CPU/RAM data for the PoolDict
 
 
 

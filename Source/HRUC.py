@@ -8,7 +8,7 @@ import re
 requests.packages.urllib3.disable_warnings()
 
 #configuring logging for this module - Comment this line when debugging is not needed
-logging.basicConfig(stream=sys.stderr, level=logging.INFO)
+#logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
 #logging.basicConfig(stream=sys.stderr, level=logging.ERROR)
 
 ############################################################################################
@@ -201,7 +201,7 @@ def PopulatevCenterData(HorizonServers, vusername, vpassword):
 
 def ParseData(HorizonServers, vCenterServers):
     """
-    Takes in info for all Horizon Servers and vCenter Servers, and produces a CodeDict which can be easily iterated through when writing the data to Excel
+    Takes in info for all Horizon Servers and vCenter Servers, and produces a PoolDict which contains a dictionary with an entry for every pool across all environments
 
     Parameters
     ----------
@@ -271,8 +271,29 @@ def ParseData(HorizonServers, vCenterServers):
                             poolDict[poolName]["ClusterName"] = clusterlist[p][2]                      ######################
                             poolDict[poolName]["VCCFriendlyName"] = clusterlist[p][0]
             except Exception as e: 
-                logging.error("Unplanned error gettng the vCenter server from ID")
-                logging.error(f"Exception = {e}")
+                logging.debug("Unplanned error gettng the vCenter server from ID")
+                logging.debug(f"Exception = {e}")
+  
+            try: 
+                vcName = poolDict[poolName]["vCenterServer"]
+                vmlist = vCenterServers[vcName][1]
+
+                logging.debug(f"Number of VMs in {vcName} is {len(vmlist)}")
+                #iterating through the vmlist for this pools vcenter
+                for p in range(len(vmlist)):
+                   vmid = vmlist[p]['vm'] 
+                   logging.info(f"\n\n\n ID of VM whose name I'm trying to find = {vmid}")
+                   if vmid == poolDict[poolName]["ParentID"]:
+                        # if a vm list vm has the same id
+                        poolDict[poolName]["VMName"] = vmlist[p]['name']
+                        poolDict[poolName]["Memory"] = vmlist[p]['memory_size_MiB']
+                        poolDict[poolName]["CPU"] = vmlist[p]['cpu_count']
+
+                logging.debug(f"Printing the dict for {poolName} : {poolDict[poolName]} \n\n")
+            except Exception as e:
+                logging.debug("\n\nSomething went wrong matching gold images to vcVMs")
+                logging.debug(f"Exception is {e}\n\n")
+   
 
     pp = pprint.PrettyPrinter(indent=4)
     logging.info(f"\n\nPoolDict = {pp.pformat(poolDict)}")
@@ -280,6 +301,29 @@ def ParseData(HorizonServers, vCenterServers):
     return poolDict
 
 def CreateCodeDict(vCenterServers, poolDict):
+    """
+    Takes in info for all Horizon Pools and vCenter Servers, and produces a CodeDict which can be easily iterated through when writing the data to Excel
+
+    Parameters
+    ----------
+    vCenterServers :  Dict[vchostname] = [finalClusters, vms]
+        Dict with vCenterHostname as key, and value as a list [finalClsuters, vms]
+            finalClusters is a list of lists - each inner list corresponds to a cluster in the vcenter hostname
+                - inner list format: [friendlyname (vcenter-clustername), cluster id, cluster name, cpu capacity, cpuu usage,mem capacity,mem usage]
+                - exa: ['10.173.8.2-Cluster-1', 'domain-c7', 'Cluster-1', 247860, 18406, 1765242, 316201]
+            vms is a list of dictionaries corresponding to each VM in the vCenter
+                - dictionary format: {'memory_size_MiB': <mem-sze>, 'vm': <vm-Id>, 'name': <vm display name>, 'power_state': <string power status>, 'cpu_count': <num vcpus>}
+                - exa: {'memory_size_MiB': 4096, 'vm': 'vm-4226', 'name': 'cp-template-376a0896-fa6b-4a6f-b185-0449e1460222', 'power_state': 'POWERED_OFF', 'cpu_count': 2}
+    PoolDict : Dict
+            A Dictionary of key: PoolName, value=dict{"PoolName", "vCenterID", "ClusterID", etc}
+
+    Returns
+    -------
+    codeDict : dict 
+        Dict with key='VcenterHost-ClusterName' and value=list[PoolDictEntry, PoolDictEntry,...]
+        This is easy to iterate through when writing to an excel file
+        
+    """
     codeDict = {}
     for val in vCenterServers.values():
         clusterlist = val[0]
@@ -297,10 +341,31 @@ def CreateCodeDict(vCenterServers, poolDict):
     return codeDict
 
 
-###
-### NEED TO REDO THIS FXN
-###
+
 def WriteToExcel(vCenterServers, codeDict):
+    """
+    Takes in info for all Horizon Pools and vCenter Servers, and produces a CodeDict which can be easily iterated through when writing the data to Excel
+
+    Parameters
+    ----------
+    vCenterServers :  Dict[vchostname] = [finalClusters, vms]
+        Dict with vCenterHostname as key, and value as a list [finalClsuters, vms]
+            finalClusters is a list of lists - each inner list corresponds to a cluster in the vcenter hostname
+                - inner list format: [friendlyname (vcenter-clustername), cluster id, cluster name, cpu capacity, cpuu usage,mem capacity,mem usage]
+                - exa: ['10.173.8.2-Cluster-1', 'domain-c7', 'Cluster-1', 247860, 18406, 1765242, 316201]
+            vms is a list of dictionaries corresponding to each VM in the vCenter
+                - dictionary format: {'memory_size_MiB': <mem-sze>, 'vm': <vm-Id>, 'name': <vm display name>, 'power_state': <string power status>, 'cpu_count': <num vcpus>}
+                - exa: {'memory_size_MiB': 4096, 'vm': 'vm-4226', 'name': 'cp-template-376a0896-fa6b-4a6f-b185-0449e1460222', 'power_state': 'POWERED_OFF', 'cpu_count': 2}
+    codeDict : dict 
+        Dict with key='VcenterHost-ClusterName' and value=list[PoolDictEntry, PoolDictEntry,...]
+        This is easy to iterate through when writing to an excel file
+
+    Returns
+    -------
+    No return - an Excel file is outputted to the current working directory containing all of the previously captured data
+        
+    """
+
      # Initialize the Workbook
     wb = Workbook()
 
@@ -342,6 +407,7 @@ def WriteToExcel(vCenterServers, codeDict):
                     ws['D'+str(n)] = str(float(clusterdata[g][4])/1000) # = CPUR
                     ws['E'+str(n)] = str(float(clusterdata[g][5])/1000) # = MemC
                     ws['F'+str(n)] = str(float(clusterdata[g][6])/1000) # = MemR  
+                    index += 1
             continue # go to next sheet because we are done printing data
 
         logging.debug(f"Adding the headers for {ws.title}")
@@ -352,8 +418,7 @@ def WriteToExcel(vCenterServers, codeDict):
         ws['E1'] = "Memory Capacity (GB)"
         ws['F1'] = "Memory Usage (GB)"
         
-############################################### WORK FROM HERE DOWN #######################################
-        ### NEED TO PRINT THE DATA VALUES ON THE SECOND COLUMN
+
         for v in vCenterServers.values():
             clusterdata = v[0] 
             for i in range(len(clusterdata)):
