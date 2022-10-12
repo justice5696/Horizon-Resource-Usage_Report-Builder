@@ -15,3 +15,5 @@ The INI file has the following fields:
     - Username: a domain username with Read-Only Administrator privileges in all Horizon Pods and any vCenter that the Horizon Pods are connected to.
     - Password: the password of the above username
     - Domain: the domain of the above credentials
+
+    *** The account listed in the INI file must have Read-Only Admin permissions in all Horizon and vCenter Environments that will be queried. ***

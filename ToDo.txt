@@ -13,7 +13,6 @@ ToDo:
 - Add the vCenter Domain to the user credentials for vCenter auth (in case the domain isn't the default) - just do username+@+domain
 
 
-
-
+- Figure out what happens if the account does not have permissions in one or more of the vCenter/Horizon Environments
 
 
