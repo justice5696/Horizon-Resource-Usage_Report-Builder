@@ -15,4 +15,5 @@ ToDo:
 
 - Figure out what happens if the account does not have permissions in one or more of the vCenter/Horizon Environments
 
+- Grab the Farms and their max number
 

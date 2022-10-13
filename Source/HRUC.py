@@ -75,11 +75,11 @@ def ParseArgs(argv):
             global hdomain
             hdomain = params['Domain']
         except KeyError:
-            logging.debug("The Config file is not configured correctly.")
+            logging.error("The Config file is not configured correctly.")
             print("The config file has invalid/missing data. Ending the program.")
             sys.exit()
         except:
-            logging.debug("Uncaught exception parsing the config JSON.")
+            logging.error("Uncaught exception parsing the config JSON.")
             print("There was an issue parsing the config file. Ending the program.")
             sys.exit()
 
@@ -149,9 +149,7 @@ def PopulatevCenterData(HorizonServers, vusername, vpassword):
         
     """  
     vCenterServers = {} # dict of key:vcenterHostname, value: vmlist, clusters
-    #for each Horizon Server, extract vCenter Servers.
-        #for each vCenter Server 
-        #vCenterHost = {vCenterHostname} -> each vCenter Hostsname= [Clusters[ClusterName, ID, CPU, MEM], VMlist] 
+ 
     for key in HorizonServers: #iterates through each connection server
         vclist = HorizonServers[key][2] # this should be the the vcenter list for the connection server
         for y in range(len(vclist)):
@@ -233,28 +231,32 @@ def ParseData(HorizonServers, vCenterServers):
         logging.debug(f"Printing vclist for this horizon server = {vclist}")
         for z in range(len(poollist)):
             tempPool = poollist[z]
-            logging.debug(f"\n\nTempPool{key}{z} = {tempPool}\n\n")
+            #logging.debug(f"\n\nTempPool{key}{z} = {tempPool}\n\n")
             try:
-                pattern_naming_settings = tempPool['pattern_naming_settings']
-                provisioning_settings = tempPool['provisioning_settings']
+                pattern_naming_settings = tempPool.get('pattern_naming_settings', {})
+                provisioning_settings = tempPool.get('provisioning_settings',{})
 
-                poolName = tempPool['name']
+                poolName = tempPool.get('name',"Unknown")
                 logging.debug(f"Saving pool data to the poolDict for pool = {poolName}")
                 poolDict[poolName] = {}
                 poolDict[poolName]["PoolName"] = poolName
-                poolDict[poolName]["vCenterID"] = tempPool['vcenter_id'] #id of the vCenter this pool is in
-                poolDict[poolName]["ClusterID"] = provisioning_settings['host_or_cluster_id'] #id of the cluster
-                poolDict[poolName]["ParentID"] = provisioning_settings['parent_vm_id']
-                poolDict[poolName]["PoolStatus"] = tempPool['enabled'] #pool status
-                poolDict[poolName]["Provisioning"] = tempPool['enable_provisioning'] #determines whether provisioning is currently on
-                poolDict[poolName]["MaxMachines"] = pattern_naming_settings['max_number_of_machines'] # max number of machines
-                poolDict[poolName]["MinMachines"] = pattern_naming_settings['min_number_of_machines']
-                poolDict[poolName]["SpareMachines"] = pattern_naming_settings['number_of_spare_machines']
-                poolDict[poolName]["NamingPattern"] = pattern_naming_settings['naming_pattern']
-                poolDict[poolName]["Deleting"] = tempPool['delete_in_progress']
-                poolDict[poolName]["Source"] = tempPool['image_source'] # : 'VIRTUAL_CENTER'
-            except KeyError:
-                logging.debug(f"The 'pattern_naming_settings' key doesn't exist for this pool: {tempPool['name']} (because its not an autoamted pool)") 
+                poolDict[poolName]["vCenterID"] = tempPool.get('vcenter_id', "Unknown") #id of the vCenter this pool is in
+                poolDict[poolName]["ClusterID"] = provisioning_settings.get('host_or_cluster_id', "Unknown") #id of the cluster
+                poolDict[poolName]["ParentID"] = provisioning_settings.get('parent_vm_id', "Unknown")
+                poolDict[poolName]["PoolStatus"] = tempPool.get('enabled', False) #pool status
+                poolDict[poolName]["Provisioning"] = tempPool.get('enable_provisioning',False) #determines whether provisioning is currently on
+                poolDict[poolName]["MaxMachines"] = pattern_naming_settings.get('max_number_of_machines', 0) # max number of machines
+                poolDict[poolName]["MinMachines"] = pattern_naming_settings.get('min_number_of_machines', 0)
+                poolDict[poolName]["SpareMachines"] = pattern_naming_settings.get('number_of_spare_machines', 0)
+                poolDict[poolName]["NamingPattern"] = pattern_naming_settings.get('naming_pattern', "Unknown")
+                poolDict[poolName]["Deleting"] = tempPool.get('delete_in_progress', False)
+                poolDict[poolName]["Source"] = tempPool.get('image_source', "Unknown") # : 'VIRTUAL_CENTER'
+                poolDict[poolName]["Type"] = tempPool.get('type', "Unknown")
+
+            except Exception as e:
+                logging.error(f"\n Likely KeyError: {tempPool['name']}") 
+                logging.error(f"Exception = {e}\n")
+
             try: 
                 #ITERATE THROUGH EACH vCENTER ASSOCIATED WITH THIS HORIZON SERVEr
                 for h in range(len(vclist)):
@@ -262,27 +264,33 @@ def ParseData(HorizonServers, vCenterServers):
                     if poolDict[poolName]["vCenterID"] == vclist[h][0]: #ID of the vcenter
                             #if tempvCList[h][1] is an IP, it will get mapped to DNS
                         poolDict[poolName]["vCenterServer"] = vclist[h][1]
+            
                     # find vcenter clustername and friendly name for the current pool
         
                     clusterlist = vCenterServers[vclist[h][1]][0]
                     for p in range(len(clusterlist)):
-                            # if the pool's clusterid == the clusterlist[p] id       ##############
-                        if (poolDict[poolName]["ClusterID"] == clusterlist[p][1]):#################### MIGHT NEED TO CHECK WHEThER itS THE CORreCt VCENTer AS WELL
-                            poolDict[poolName]["ClusterName"] = clusterlist[p][2]                      ######################
+                            # if the pool's clusterid == the clusterlist[p] id      
+                        if (poolDict[poolName]["ClusterID"] == clusterlist[p][1]):
+                            poolDict[poolName]["ClusterName"] = clusterlist[p][2]                      
                             poolDict[poolName]["VCCFriendlyName"] = clusterlist[p][0]
             except Exception as e: 
-                logging.debug("Unplanned error gettng the vCenter server from ID")
-                logging.debug(f"Exception = {e}")
+                logging.error("Unplanned error gettng the vCenter server from ID")
+                logging.error(f"Exception = {e}")
   
             try: 
-                vcName = poolDict[poolName]["vCenterServer"]
+                vcName = poolDict[poolName].get("vCenterServer", "Unknown")
+                if vcName == "Unknown":
+                    poolDict[poolName]["VMName"] = "Unknown"
+                    poolDict[poolName]["Memory"] = 0
+                    poolDict[poolName]["CPU"] = 0
+                    continue
                 vmlist = vCenterServers[vcName][1]
 
-                logging.debug(f"Number of VMs in {vcName} is {len(vmlist)}")
+                #logging.debug(f"Number of VMs in {vcName} is {len(vmlist)}")
                 #iterating through the vmlist for this pools vcenter
                 for p in range(len(vmlist)):
                    vmid = vmlist[p]['vm'] 
-                   logging.info(f"\n\n\n ID of VM whose name I'm trying to find = {vmid}")
+                   #logging.info(f"\n\n\n ID of VM whose name I'm trying to find = {vmid}")
                    if vmid == poolDict[poolName]["ParentID"]:
                         # if a vm list vm has the same id
                         poolDict[poolName]["VMName"] = vmlist[p]['name']
@@ -291,8 +299,8 @@ def ParseData(HorizonServers, vCenterServers):
 
                 logging.debug(f"Printing the dict for {poolName} : {poolDict[poolName]} \n\n")
             except Exception as e:
-                logging.debug("\n\nSomething went wrong matching gold images to vcVMs")
-                logging.debug(f"Exception is {e}\n\n")
+                logging.error("\n\nSomething went wrong matching gold images to vcVMs")
+                logging.error(f"Exception is {e}\n\n")
    
 
     pp = pprint.PrettyPrinter(indent=4)
@@ -331,13 +339,9 @@ def CreateCodeDict(vCenterServers, poolDict):
             clustercode = clusterlist[r][0]
             templist = []
             for v in poolDict.values():
-                if v["VCCFriendlyName"] == clustercode:
+                if v.get("VCCFriendlyName","Unknown") == clustercode:
                     templist.append(v)
             codeDict[clustercode] = templist
-    #iterate through each cluster object
-        #iterate through each pool in pooldict
-            # if pooldict[item][vccfriendlyname] == clusterfriendlyname
-
     return codeDict
 
 
@@ -375,8 +379,7 @@ def WriteToExcel(vCenterServers, codeDict):
     #delete the default sheet that gets created
     wb.remove(wb['Sheet'])
     
-    #### 
-    ####CHANGE THIS SO THAT THE NAME OF EACH SHEET IS THE vCfirendly name
+
     index = 0
     for v in vCenterServers.values():
         clusterdata = v[0] 
@@ -441,66 +444,77 @@ def WriteToExcel(vCenterServers, codeDict):
         ws['D4'] = "vCPUs"
         ws['E4'] = "vRAM (GB)"
         ws['F4'] = "Provisioing Status"
+        ws['G4'] = "Pool Status"
 
         # Write the data for Each Row 
         temple = codeDict[ws.title] # returns a list of every pool as a dict with VCC = ws.title
         for i in range(len(temple)):
             try:
-                ### 
-                ##  CHANGE THESE TO GETS WITH A DEFAULT VALUE
-                #logging.debug(f"Row filler - tempnum = {tempnum}")
-                #ws['A'+str(i+5)] = temple[i]["PoolName"]
-                ws['A'+str(i+5)] = temple[i].get("PoolName","UNDEFINED")
-
-                #ws['B'+str(i+5)] = temple[i]["MaxMachines"]
-                ws['B'+str(i+5)] = temple[i].get("MaxMachines",0)
-
-                #ws['C'+str(i+5)] = temple[i]["VMName"]
-                ws['C'+str(i+5)] = temple[i].get("VMName", "UNDEFINED")
-
-                #ws['D'+str(i+5)] = float(temple[i]["CPU"])
-                ws['D'+str(i+5)] = float(temple[i].get("CPU",0))
-
-                #ws['E'+str(i+5)] = (float(temple[i]["Memory"])/1000)
-                ws['E'+str(i+5)] = (float(temple[i].get("Memory",0))/1000)
-
-                #ws['F'+str(i+5)] = temple[i]["Provisioning"]
-                ws['F'+str(i+5)] = temple[i].get("Provisioning", "UNDEFINED")
+                if temple[i].get("Type", "UNDEFINED") != "AUTOMATED":
+                    #it is an RDS Desktop pool or a Manual Pool, so skip it
+                    continue
+                if temple[i].get("PoolStatus", "UNDEFINED") == False:
+                    ws['A'+str(i+5)] = temple[i].get("PoolName","UNDEFINED")
+                    ws['B'+str(i+5)] = int(0)
+                    ws['C'+str(i+5)] = temple[i].get("VMName", "DISABLED")
+                    ws['D'+str(i+5)] = int(0)
+                    ws['E'+str(i+5)] = int(0)
+                    ws['F'+str(i+5)] = "DISABLED"
+                    ws['G'+str(i+5)] = "DISABLED"
+                else:
+                    ws['A'+str(i+5)] = temple[i].get("PoolName","UNDEFINED")
+                    ws['B'+str(i+5)] = int(temple[i].get("MaxMachines",0))
+                    ws['C'+str(i+5)] = temple[i].get("VMName", "UNDEFINED")
+                    ws['D'+str(i+5)] = float(temple[i].get("CPU",0))
+                    ws['E'+str(i+5)] = (float(temple[i].get("Memory",0))/1000)
+                    if temple[i].get("Provisioning", "UNDEFINED") == False:
+                        ws['F'+str(i+5)] = "DISABLED"
+                    else:
+                        ws['F'+str(i+5)] = temple[i].get("Provisioning", "UNDEFINED")
+                    ws['G'+str(i+5)] = temple[i].get("PoolStatus", "UNDEFINED")
                 
             except KeyError as e:
                 logging.debug(f"\n\nException = {e}")
                 logging.debug(f"CodeDict KeyError: {temple[i]} \n\n")
-                ## MAYBE USE THIS EXCEPT TO WRITE 0s for MacMachines,CPU,and Memory so this exception doesn't break the SUMPRODUCT
+               
 
         
       
 
         maxRow = 5 + (len(temple) - 1)
-        ws['H4'] = "Totals"
-        ws['H5'] = "Max Possible vCPUs (Enabled)"
-        ws['H6'] = "Max Possible GHz Usage (vCPUs*HostCoreFrequency) (Enabled)"
-        ws['H7'] = "Max Possible vCPUs (All)"
-        ws['H8'] = "Max Possible GHz Usage (vCPUs*HostCoreFrequency) (All)"
-        ws['H9'] = "Max Possible RAM Usage GB (Enabled) "
-        ws['H10'] = "Max Possible RAM Usage GB (All)"
-        ws['H11'] = "Max Possible RAM Usage % (Enabled) "
-        ws['H12'] = "Max Possible RAM Usage % (All)"
-        #ws['J4'] = "% of Resources"
+        ws['I4'] = "Totals"
+        ws['I5'] = "Max Possible vCPUs (Enabled)"
+        #ws['I6'] = "Max Possible GHz Usage (vCPUs*HostCoreFrequency) (Enabled)"
+        ws['I7'] = "Max Possible vCPUs (All)"
+        #ws['I8'] = "Max Possible GHz Usage (vCPUs*HostCoreFrequency) (All)"
+        ws['I9'] = "Max Possible RAM Usage GB (Enabled) "
+        ws['I10'] = "Max Possible RAM Usage GB (All)"
+        ws['I11'] = "Max Possible RAM Usage % (Enabled) "
+        ws['I12'] = "Max Possible RAM Usage % (All)"
+
                 # Total vCPUS Enabled
-        ws['I5'] = f"=SUMPRODUCT(D5:D{maxRow}*(F5:F{maxRow}=TRUE),B5:B{maxRow}*(F5:F{maxRow}=TRUE))"
-                # Total vCPU multiplied by the GHz frequency of a single host's core (hardcoded the 2.3 GHz)
-        ws['I6'] = f"=I5*2.3"
+        ws['J5'] = f"=SUMPRODUCT(D5:D{maxRow}*(F5:F{maxRow}=TRUE),B5:B{maxRow}*(F5:F{maxRow}=TRUE))"
+
+                # Total vCPU multiplied by the GHz frequency of a single host's core (hardcoded the 2.3 GHz)  
+        #ws['J6'] = f"=J5*2.3"
+
                 # Total vCPUS
-        ws['I7'] = f"=SUMPRODUCT(D5:D{maxRow},B5:B{maxRow})"
-        ws['I8'] = f"=I7*2.3"
-         # Total Mem Enabled Sum of E columen (Mem) times B column (num machines) if the F Column is TRUE
-        ws['I9'] = f"=SUMPRODUCT(E5:E{maxRow}*(F5:F{maxRow}=TRUE),B5:B{maxRow}*(F5:F{maxRow}=TRUE))"
-                # Total Mem: Sum of E columen (Mem) times B column (num machines)
-        ws['I10'] = f"=SUMPRODUCT(E5:E{maxRow},B5:B{maxRow})"
+        ws['J7'] = f"=SUMPRODUCT(D5:D{maxRow},B5:B{maxRow})"
+
+                # Total vCPU multiplied by the GHz frequency of a single host's core (hardcoded the 2.3 GHz)  
+        #ws['J8'] = f"=J7*2.3"
+
                 # Total Mem Enabled Sum of E columen (Mem) times B column (num machines) if the F Column is TRUE
-        ws['I11'] = f"=(SUMPRODUCT(E5:E{maxRow}*(F5:F{maxRow}=TRUE),B5:B{maxRow}*(F5:F{maxRow}=TRUE))/E2)*100"
+        ws['J9'] = f"=SUMPRODUCT(E5:E{maxRow}*(F5:F{maxRow}=TRUE),B5:B{maxRow}*(F5:F{maxRow}=TRUE))"
+
                 # Total Mem: Sum of E columen (Mem) times B column (num machines)
-        ws['I12'] = f"=(SUMPRODUCT(E5:E{maxRow},B5:B{maxRow})/E2)*100"
+        ws['J10'] = f"=SUMPRODUCT(E5:E{maxRow},B5:B{maxRow})"
+
+                # Total Mem Enabled Sum of E columen (Mem) times B column (num machines) if the F Column is TRUE
+        ws['J11'] = f"=(SUMPRODUCT(E5:E{maxRow}*(F5:F{maxRow}=TRUE),B5:B{maxRow}*(F5:F{maxRow}=TRUE))/E2)*100"
+
+                # Total Mem: Sum of E columen (Mem) times B column (num machines)
+        ws['J12'] = f"=(SUMPRODUCT(E5:E{maxRow},B5:B{maxRow})/E2)*100"
        
     
     
